@@ -1,3 +1,5 @@
+// Copyright 2018 Mathieu Lonjaret
+
 package main
 
 import (
@@ -10,25 +12,34 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime/trace"
 	"strings"
 )
 
-// permanode is sha1-6f498bda032b38cc94f6267a40f994c6788e9b41
-
 var (
 	flagVerbose = flag.Bool("v", false, "Be verbose")
-	flagInput = flag.String("input", "", "text file to read as input")
+	flagInput   = flag.String("input", "", "text file to read as input")
 )
 
 var input []byte
 
 func main() {
+	f, err := os.Create("/home/mpl/trace.dat")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	if err := trace.Start(f); err != nil {
+		log.Fatal(err)
+	}
+	defer trace.Stop()
+
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 1 {
 		log.Fatal("nope")
 	}
-	var err error
+
 	if *flagInput != "" {
 		input, err = ioutil.ReadFile(*flagInput)
 		if err != nil {
@@ -79,8 +90,15 @@ func addMember(containerSet string) {
 		if *flagVerbose {
 			println(cmdstr)
 		}
-		if out, err := exec.Command("camput", strings.Fields(cmdstr)...).Output(); err != nil {
-			log.Fatalf("camput error: %v, %v", err, string(out))
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		cmd := exec.Command("camput", strings.Fields(cmdstr)...)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			log.Fatalf("camput error: %v, %v, %v", err, stdout.String(), stderr.String())
+		} else {
+			println(stderr.String())
 		}
 		count++
 	}
